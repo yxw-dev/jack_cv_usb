@@ -25,9 +25,10 @@ class cv_match:
         mv, mxv, minl, maxl = cv2.minMaxLoc(res_shuttle)
         cv2.rectangle(img, (minl[0], minl[1]), (minl[0] + self.width_s, minl[1] + self.height_s), (0, 255, 0), 1)
         left_line = min_loc[0] + 28
-        right_line = minl[0] + 2
+        right_line = minl[0] - 2
+        res = (left_line + right_line) / 2
         step = (right_line - left_line) * 0.022
-        return minl[0] , step.__abs__()
+        return int(res) , step.__abs__()
 
 te = cv_match()
 

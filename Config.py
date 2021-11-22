@@ -5,7 +5,6 @@ import sys
 
 class ini_operate:
     file_path = os.path.dirname(os.path.abspath(sys.argv[0])) + '\conf.ini'
-    print(file_path)
     #命令集合（字典）
     order_dist = dict()
     def __init__(self):

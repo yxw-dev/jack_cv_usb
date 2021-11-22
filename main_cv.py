@@ -4,12 +4,14 @@ import os
 import time
 import glob
 import Config
+import asyncio
 from cv_show import *
 from usb_pi import get_port
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 from configobj import ConfigObj
+from Date_Encyption import info_ok
 import cv2_model
 
 class MyMainWindow(QMainWindow , Ui_MainWindow):
@@ -39,7 +41,9 @@ class MyMainWindow(QMainWindow , Ui_MainWindow):
         self.ca_step = cv2_model.cv_match()
         self.temp_step = 0
         self.count = 0#计数，多次无结果将step设0
-
+        #更改取代刻度条控件，方便算法直接控制线的位置
+        self.left_move_pix = 0
+        self.right_move_pix = 0
 
 
     def my_init(self):
@@ -54,7 +58,7 @@ class MyMainWindow(QMainWindow , Ui_MainWindow):
         self.label_11.setPixmap(temp_pic)
         self.init_time.stop()
 
-        #读取配置参数（左右相机放大率，默认线位置）设置指示线位置
+        #读取配置参数（左右相机放大率，默认线位置）设置指示线位置,判定硬件绑定
         try:
             ini = Config.ini_operate()
             self.config = ini.order_dist
@@ -68,9 +72,12 @@ class MyMainWindow(QMainWindow , Ui_MainWindow):
         self.height_step = float(self.config['line_right_width'])  # 纵向两红线间隔默认值
         self.doubleSpinBox.setValue(self.height_step)
         self.doubleSpinBox_2.setValue(self.width_step)
-        self.horizontalSlider.setValue(int(self.config['line_left']))
-        self.verticalSlider.setValue(int(self.config['line_right_v']))
+        self.left_move_pix = int(self.config['line_left'])
+        self.right_move_pix = int(self.config['line_right_v'])
         self.pushbutton5_y = int(self.config['line_right_h'])
+        if info_ok(self.config['version']) == False:
+            print('版本错误')
+            self.close()
         #获取相机编号
         self.cam_number = [0,1]
 
@@ -97,10 +104,10 @@ class MyMainWindow(QMainWindow , Ui_MainWindow):
             file_path = os.path.dirname(os.path.abspath(sys.argv[0])) + '\conf.ini'
             config = ConfigObj(file_path)
             config['line_left_width'] = self.width_step
-            config['line_left'] = self.horizontalSlider.value()
+            config['line_left'] = self.left_move_pix
             config['line_right_width'] = self.height_step
             config['line_right_h'] = self.pushbutton5_y
-            config['line_right_v'] = self.verticalSlider.value()
+            config['line_right_v'] = self.right_move_pix
             config.write()
             self.close()
         if(event.key() == Qt.Key_I):
@@ -112,17 +119,25 @@ class MyMainWindow(QMainWindow , Ui_MainWindow):
         if(event.key() == Qt.Key_C):
             self.get_pixmap_flag = 2
         if(event.key() == Qt.Key_A):
-            self.horizontalSlider.setValue(self.horizontalSlider.value() - 1)
+            if self.left_move_pix == 0:
+                self.left_move_pix = self.label.width()
+                self.drawline()
+            else:
+                self.left_move_pix = self.left_move_pix - 1
+                self.drawline()
             self.update()
         if (event.key() == Qt.Key_D):
-            self.horizontalSlider.setValue(self.horizontalSlider.value() + 1)
-            self.update()
+            if self.left_move_pix == self.label.width():
+                self.left_move_pix = 0
+                self.drawline()
+            else:
+                self.left_move_pix = self.left_move_pix + 1
+                self.drawline()
         if(event.key() == Qt.Key_W):
             if(self.width_step < self.width_step_max):
                 self.width_step = self.width_step + 0.01
             else:
                 self.width_step = 0
-            self.update()
             self.drawline()
             self.doubleSpinBox_2.setValue(self.width_step)
         if (event.key() == Qt.Key_S):
@@ -130,17 +145,26 @@ class MyMainWindow(QMainWindow , Ui_MainWindow):
                 self.width_step = self.width_step - 0.01
             else:
                 self.width_step = self.width_step_max
-            self.update()
             self.drawline()
             self.doubleSpinBox_2.setValue(self.width_step)
 
 
         if (event.key() == Qt.Key_Left):
-            self.verticalSlider.setValue(self.verticalSlider.value() + 1)
-            self.update()
+            if (self.height_step > 0):
+                self.height_step = self.height_step - 0.01
+            else:
+                self.height_step = self.height_step_max
+            self.drawline()
+            self.doubleSpinBox.setValue(self.height_step)
+
         if (event.key() == Qt.Key_Right):
-            self.verticalSlider.setValue(self.verticalSlider.value() - 1)
-            self.update()
+            if (self.height_step < self.height_step_max):
+                self.height_step = self.height_step + 0.01
+            else:
+                self.height_step = 0
+            self.drawline()
+            self.doubleSpinBox.setValue(self.height_step)
+
         if(event.key() == Qt.Key_Comma):
             self.pushbutton5_y = self.pushbutton5_y - 1
             self.drawline()
@@ -148,33 +172,33 @@ class MyMainWindow(QMainWindow , Ui_MainWindow):
             self.pushbutton5_y = self.pushbutton5_y + 1
             self.drawline()
         if (event.key() == Qt.Key_Up):
-            if (self.height_step < self.height_step_max):
-                self.height_step = self.height_step + 0.01
+            if self.right_move_pix == 0:
+                self.right_move_pix = self.label_2.height()
+                self.drawline()
             else:
-                self.height_step = 0
-            self.update()
-            self.drawline()
-            self.doubleSpinBox.setValue(self.height_step)
+                self.right_move_pix = self.right_move_pix - 1
+                self.drawline()
         if (event.key() == Qt.Key_Down):
-            if (self.height_step > 0):
-                self.height_step = self.height_step - 0.01
+            if self.right_move_pix == self.label_2.height():
+                self.right_move_pix = 0
+                self.drawline()
             else:
-                self.height_step = self.height_step_max
-            self.update()
-            self.drawline()
-            self.doubleSpinBox.setValue(self.height_step)
+                self.right_move_pix = self.right_move_pix + 1
+                self.drawline()
+        self.horizontalSlider.setValue(int((self.left_move_pix * 100) / self.label.width()))
+        self.verticalSlider.setValue(99 - int((self.right_move_pix * 100) / self.label_2.width()))
 
 
     def drawline(self):
         try:
+            #变焦相机设置焦距
             self.focal_set(self.horizontalSlider.value() * 5)
         except:
             return
-        sta1 = self.label.x() + (self.label.width() /  100) * float(self.horizontalSlider.value()+0.5)
-        sta2 = self.label_2.y() + (self.label_2.height() /  100) * float(99 - self.verticalSlider.value() + 0.5)
+        sta1 = self.label.x() + self.left_move_pix
+        sta2 = self.label_2.y() + self.right_move_pix
         step1 = (self.doubleSpinBox_2.value()/ 20) * self.label.width()
         step2 = (self.doubleSpinBox.value() / 15) * self.label_2.height()
-
         #更新lcd显示当前线宽长度
         self.lcdNumber.display('%.3f'%(float(self.config['ratio_l']) * self.width_step))
         self.lcdNumber_2.display('%.3f'%(float(self.config['ratio_r']) * self.height_step))
@@ -258,8 +282,8 @@ class MyMainWindow(QMainWindow , Ui_MainWindow):
         if not ret:
             print('read error!\n')
             self.label_5.setText("正面相机：打开失败")
-            self.pushButton1.hide()
-            self.pushButton2.hide()
+            # self.pushButton1.hide()
+            # self.pushButton2.hide()
             self.cam_time.stop()
             return
         cut = img[int(self.config['start_y']):int(self.config['end_y']) , int(self.config['start_x']):int(self.config['end_x'])] # 裁剪坐标为[y0:y1, x0:x1]
@@ -271,28 +295,7 @@ class MyMainWindow(QMainWindow , Ui_MainWindow):
         pixmap = QImage(cur_frame, width, heigt, QImage.Format_RGB888)
         pixmap = QPixmap.fromImage(pixmap)
         self.label.setPixmap(pixmap)
-        #匹配计算间距
-        loc , step = self.ca_step.get_step(cur_frame)
-        if step < 0.3:
-            # 调节正面相机间距指示线位置loc
-            start_point  = self.label.x() + loc * 2#一个系数，图像像素和label宽度的比
-            self.temp_step = step
-            self.step_show_label.setText('%.3f' % (float(self.temp_step)))
-            if self.count > 4:
-                self.count = self.count - 1
-            else:
-                self.count = 0
-        else:
-            self.count = self.count + 1
-            if self.count > 8:
-                self.step_show_label.setText('0')
-                self.count = 0
-        if step > float(self.lcdNumber.value()):
-            self.pushButton1.setStyleSheet("border:2px solid rgb(255,0,0)")
-            self.pushButton2.setStyleSheet("border:2px solid rgb(255,0,0)")
-        else:
-            self.pushButton1.setStyleSheet("border:2px solid rgb(0,255,0)")
-            self.pushButton2.setStyleSheet("border:2px solid rgb(0,255,0)")
+        self.mod_find(cur_frame)
 
         end_time1 = time.time()
         diff_time1 = (end_time1 - self.start_time1)
@@ -311,14 +314,44 @@ class MyMainWindow(QMainWindow , Ui_MainWindow):
             file_name = os.path.dirname(os.path.abspath(__file__))+'/图片/' + str(len(file_number)+1) + "_f.jpg"
             pixmap.save(file_name)
             self.get_pixmap_flag = 1
+
+    async def mod_find(self , img):
+        t1 = time.time()
+        # 匹配计算间距
+        loc, step = self.ca_step.get_step(img)
+        if step < 0.3:
+            # 调节正面相机间距指示线位置loc
+            start_point = self.label.x() + loc * 2  # 一个系数，图像像素和label宽度的比
+            self.temp_step = step
+            self.step_show_label.setText('%.3f' % (float(self.temp_step)))
+            if self.count > 4:
+                self.count = self.count - 1
+            else:
+                self.count = 0
+        else:
+            self.count = self.count + 1
+            if self.count > 8:
+                self.step_show_label.setText('0')
+                self.count = 0
+        if step > float(self.lcdNumber.value()):
+            self.pushButton1.setStyleSheet("border:2px solid rgb(255,0,0)")
+            self.pushButton2.setStyleSheet("border:2px solid rgb(255,0,0)")
+        else:
+            self.pushButton1.setStyleSheet("border:2px solid rgb(0,255,0)")
+            self.pushButton2.setStyleSheet("border:2px solid rgb(0,255,0)")
+        #调整左侧指示线位置
+        self.left_move_pix = loc
+        t2 = time.time()
+        diff_time1 = (t2 - t1)
+        print(diff_time1)
     def show_pic2(self):
         ret_2, img_2 = self.cap2.read()
         if not ret_2:
             print('read error!\n')
             self.label_7.setText("侧面相机：打开失败")
-            self.pushButton3.hide()
-            self.pushButton4.hide()
-            self.pushButton5.hide()
+            # self.pushButton3.hide()
+            # self.pushButton4.hide()
+            # self.pushButton5.hide()
             self.cam_time2.stop()
             return
         #cv2.flip(img_2, 1, img_2)
